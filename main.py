@@ -80,6 +80,8 @@ async def incoming_call(request: Request):
     resp.append(gather)
     return HTMLResponse(content=str(resp), media_type="application/xml")
 
+# REPLACE THE 'process-speech' FUNCTION IN main.py WITH THIS:
+
 @app.post("/process-speech")
 async def process_speech(request: Request, SpeechResult: str = Form(None)):
     global conversation_logs
@@ -107,8 +109,12 @@ async def process_speech(request: Request, SpeechResult: str = Form(None)):
             temperature=0.6
         )
         ai_reply = response.choices[0].message.content
-    except Exception:
-        ai_reply = "Could you say that again?"
+    except Exception as e:
+        # --- DEBUGGING: Print the ACTUAL error to the dashboard ---
+        error_msg = f"SYSTEM ERROR: {str(e)}"
+        print(error_msg) # Prints to Vercel logs
+        conversation_logs.append({"role": "system", "content": error_msg}) 
+        ai_reply = "I am having a technical issue connecting to my brain."
 
     conversation_logs.append({"role": "ai", "content": ai_reply})
 
