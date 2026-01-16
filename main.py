@@ -8,36 +8,57 @@ from prompt import get_system_prompt
 
 app = FastAPI()
 
-# Mount the static folder so CSS/HTML works
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# GLOBAL MEMORY (Note: On Vercel this resets occasionally, but works for live demos)
+# GLOBAL STATE
+# Note: On Vercel, this may reset if the server "sleeps". 
+# For production, you'd use a database (Redis/Postgres).
+SYSTEM_ACTIVE = False 
 conversation_logs = []
 
-# ENV VARIABLES
 GROQ_API_KEY = os.getenv("GROQ_API_KEY") 
-VOICE_ID = "Polly.Joanna-Neural" 
+VOICE_ID = "Polly.Joanna-Neural"
 
-# --- DASHBOARD ENDPOINTS ---
+# --- DASHBOARD & CONTROL ENDPOINTS ---
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
-    # Reads the HTML file and sends it to the browser
     with open("static/index.html", "r") as f:
         return f.read()
 
-@app.get("/logs")
-async def get_logs():
-    # The frontend calls this to get the captions
-    return JSONResponse(content={"logs": conversation_logs})
+@app.get("/status")
+async def get_status():
+    """Frontend polls this to see if we are Live or Stopped"""
+    return JSONResponse(content={
+        "active": SYSTEM_ACTIVE, 
+        "logs": conversation_logs
+    })
+
+@app.post("/toggle-system")
+async def toggle_system():
+    """Button clicks hit this to flip the switch"""
+    global SYSTEM_ACTIVE
+    SYSTEM_ACTIVE = not SYSTEM_ACTIVE
+    status = "LIVE" if SYSTEM_ACTIVE else "STOPPED"
+    # Log this change so it shows in the chat window
+    conversation_logs.append({"role": "system", "content": f"System switched to {status}"})
+    return {"active": SYSTEM_ACTIVE}
 
 # --- CALLER ENDPOINTS ---
 
 @app.post("/incoming-call")
 async def incoming_call(request: Request):
     global conversation_logs
-    conversation_logs = [] # Reset logs for new call
     
+    # 1. THE GATEKEEPER CHECK
+    if not SYSTEM_ACTIVE:
+        resp = VoiceResponse()
+        resp.say("The AI system is currently offline. Please try again later.")
+        resp.hangup()
+        return HTMLResponse(content=str(resp), media_type="application/xml")
+
+    # 2. If Active, proceed as normal
+    conversation_logs = [] # Reset logs for new call
     params = request.query_params
     user_name = params.get("name", "there")
     
@@ -46,7 +67,6 @@ async def incoming_call(request: Request):
     
     greeting = f"Hi {user_name}, this is Sarah from Expert Logo Designer. Do you have a quick minute?"
     
-    # Log the AI's greeting
     conversation_logs.append({"role": "ai", "content": greeting})
     
     gather = Gather(
@@ -71,10 +91,8 @@ async def process_speech(request: Request, SpeechResult: str = Form(None)):
         resp.append(gather)
         return HTMLResponse(content=str(resp), media_type="application/xml")
 
-    # 1. Log the User's Speech
     conversation_logs.append({"role": "user", "content": SpeechResult})
 
-    # 2. Get AI Reply
     messages = [
         {"role": "system", "content": get_system_prompt("the customer")},
         {"role": "user", "content": SpeechResult}
@@ -92,10 +110,8 @@ async def process_speech(request: Request, SpeechResult: str = Form(None)):
     except Exception:
         ai_reply = "Could you say that again?"
 
-    # 3. Log the AI's Reply
     conversation_logs.append({"role": "ai", "content": ai_reply})
 
-    # 4. Speak
     clean_reply = ai_reply.replace("*", "").replace("-", " ")
     gather = Gather(input='speech', action='/process-speech', speechTimeout='auto', enhanced=True)
     gather.say(clean_reply, voice=VOICE_ID)
