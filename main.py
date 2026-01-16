@@ -102,7 +102,7 @@ async def process_speech(request: Request, SpeechResult: str = Form(None)):
 
     try:
         response = completion(
-            model="groq/llama3-8b-8192", 
+            model="groq/llama-3.1-8b-instant", 
             messages=messages,
             api_key=GROQ_API_KEY,
             max_tokens=150,
