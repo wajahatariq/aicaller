@@ -3,81 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Command Center | Expert Logo Designer</title>
+    <title>Expert Dialer | Command Center</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <header>
-        <div class="logo">Expert <span>Logo Designer</span> AI</div>
-        <button id="toggleBtn" class="btn-stop" onclick="toggleSystem()">SYSTEM OFFLINE</button>
+        <div class="logo">EXPERT <span>DIALER</span></div>
+        <div class="status-badge">● SYSTEM READY</div>
     </header>
 
     <div class="container">
+        <div class="dialer-panel">
+            <div class="input-group">
+                <label>PHONE NUMBER</label>
+                <input type="text" id="phoneInput" placeholder="+1234567890" />
+            </div>
+            <div class="input-group">
+                <label>CLIENT NAME</label>
+                <input type="text" id="nameInput" placeholder="John Doe" class="secondary-input"/>
+            </div>
+            <button id="callBtn" onclick="makeCall()">INITIATE COLD CALL</button>
+        </div>
+
         <div class="chat-window" id="chat-window">
-            <div class="message ai">
-                <span class="label">System</span>
-                Dashboard initialized. Click the button above to go LIVE.
+            <div class="message system">
+                <span class="label">SYSTEM</span>
+                Waiting for outbound command...
             </div>
         </div>
     </div>
 
     <script>
         const chatWindow = document.getElementById('chat-window');
-        const toggleBtn = document.getElementById('toggleBtn');
+        const callBtn = document.getElementById('callBtn');
         let lastLogCount = 0;
 
-        // 1. Handle Button Click
-        async function toggleSystem() {
+        async function makeCall() {
+            const phone = document.getElementById('phoneInput').value;
+            const name = document.getElementById('nameInput').value || "Friend";
+
+            if (!phone) { alert("Enter a phone number!"); return; }
+
+            callBtn.innerText = "DIALING...";
+            callBtn.classList.add('dialing');
+            callBtn.disabled = true;
+
             try {
-                const response = await fetch('/toggle-system', { method: 'POST' });
-                const data = await response.json();
-                updateButton(data.active);
+                const res = await fetch('/make-call', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ phone: phone, name: name })
+                });
+                const data = await res.json();
+                
+                if(data.status === "error") {
+                    alert("Error: " + data.message);
+                    resetBtn();
+                }
             } catch (e) {
-                console.error("Error toggling system:", e);
+                alert("Network Error");
+                resetBtn();
             }
         }
 
-        // 2. Update Button Look
-        function updateButton(isActive) {
-            if (isActive) {
-                toggleBtn.innerText = "● SYSTEM LIVE";
-                toggleBtn.className = "btn-live";
-            } else {
-                toggleBtn.innerText = "■ SYSTEM OFFLINE";
-                toggleBtn.className = "btn-stop";
-            }
+        function resetBtn() {
+            callBtn.innerText = "INITIATE COLD CALL";
+            callBtn.classList.remove('dialing');
+            callBtn.disabled = false;
         }
 
-        // 3. Poll for Logs & Status
         async function fetchStatus() {
             try {
                 const response = await fetch('/status');
                 const data = await response.json();
                 
-                // Keep button synced (in case another tab changed it)
-                updateButton(data.active);
-
-                // Update Logs
                 if (data.logs.length > lastLogCount) {
                     chatWindow.innerHTML = ''; 
                     data.logs.forEach(msg => {
                         const div = document.createElement('div');
                         div.className = `message ${msg.role}`;
                         div.innerHTML = `
-                            <span class="label">${msg.role === 'ai' ? 'Sarah (AI)' : (msg.role === 'system' ? 'System Log' : 'Client')}</span>
+                            <span class="label">${msg.role.toUpperCase()}</span>
                             ${msg.content}
                         `;
                         chatWindow.appendChild(div);
                     });
                     chatWindow.scrollTop = chatWindow.scrollHeight;
                     lastLogCount = data.logs.length;
+                    
+                    if(data.call_active === false && lastLogCount > 1) resetBtn();
                 }
-            } catch (e) {
-                console.error("Connection lost", e);
-            }
+            } catch (e) { console.error(e); }
         }
 
-        // Poll every 1 second
         setInterval(fetchStatus, 1000);
     </script>
 </body>
