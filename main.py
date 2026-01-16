@@ -1,100 +1,105 @@
 import os
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from twilio.twiml.voice_response import VoiceResponse, Gather
 from litellm import completion
 from prompt import get_system_prompt
 
 app = FastAPI()
 
-# 1. SETUP
-# Make sure these are in your Vercel Environment Variables
-GROQ_API_KEY = os.getenv("GROQ_API_KEY") 
-VOICE_ID = "Polly.Joanna-Neural" # High-quality US Female Voice
+# Mount the static folder so CSS/HTML works
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-@app.get("/")
-async def root():
-    return {"status": "active", "service": "Expert Logo Designer AI"}
+# GLOBAL MEMORY (Note: On Vercel this resets occasionally, but works for live demos)
+conversation_logs = []
+
+# ENV VARIABLES
+GROQ_API_KEY = os.getenv("GROQ_API_KEY") 
+VOICE_ID = "Polly.Joanna-Neural" 
+
+# --- DASHBOARD ENDPOINTS ---
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    # Reads the HTML file and sends it to the browser
+    with open("static/index.html", "r") as f:
+        return f.read()
+
+@app.get("/logs")
+async def get_logs():
+    # The frontend calls this to get the captions
+    return JSONResponse(content={"logs": conversation_logs})
+
+# --- CALLER ENDPOINTS ---
 
 @app.post("/incoming-call")
 async def incoming_call(request: Request):
-    """
-    Step 1: The phone rings. We pick up and greet.
-    """
+    global conversation_logs
+    conversation_logs = [] # Reset logs for new call
+    
     params = request.query_params
     user_name = params.get("name", "there")
     
     resp = VoiceResponse()
-    
-    # A small pause makes it feel like a human picking up the receiver
     resp.pause(length=1)
     
-    greeting = f"Hi {user_name}, this is Sarah calling from Expert Logo Designer. I saw you were checking out our packages, do you have a quick minute?"
+    greeting = f"Hi {user_name}, this is Sarah from Expert Logo Designer. Do you have a quick minute?"
     
-    # Gather acts as the "Ears"
+    # Log the AI's greeting
+    conversation_logs.append({"role": "ai", "content": greeting})
+    
     gather = Gather(
         input='speech',
-        action='/process-speech', # Send audio text to this endpoint
-        speechTimeout='auto',     # Smart silence detection
-        enhanced=True,            # Better transcription accuracy
-        actionOnEmptyResult=True  # Handle silence gracefully
+        action='/process-speech',
+        speechTimeout='auto',
+        enhanced=True,
+        actionOnEmptyResult=True
     )
-    
-    # Speak the greeting using the Neural Voice
     gather.say(greeting, voice=VOICE_ID)
-    
     resp.append(gather)
     return HTMLResponse(content=str(resp), media_type="application/xml")
 
 @app.post("/process-speech")
 async def process_speech(request: Request, SpeechResult: str = Form(None)):
-    """
-    Step 2: User spoke. We send text to Groq -> Get Reply -> Speak back.
-    """
+    global conversation_logs
     resp = VoiceResponse()
 
-    # Handle Silence (User didn't say anything)
     if not SpeechResult:
         gather = Gather(input='speech', action='/process-speech', speechTimeout='auto')
-        gather.say("Hello? I couldn't quite hear you.", voice=VOICE_ID)
+        gather.say("Hello? Are you there?", voice=VOICE_ID)
         resp.append(gather)
         return HTMLResponse(content=str(resp), media_type="application/xml")
 
-    # Call Groq (The Brain)
+    # 1. Log the User's Speech
+    conversation_logs.append({"role": "user", "content": SpeechResult})
+
+    # 2. Get AI Reply
     messages = [
         {"role": "system", "content": get_system_prompt("the customer")},
         {"role": "user", "content": SpeechResult}
     ]
 
     try:
-        # We use Llama3-8b because it is FAST (Critical for phone calls)
         response = completion(
             model="groq/llama3-8b-8192", 
             messages=messages,
             api_key=GROQ_API_KEY,
             max_tokens=150,
-            temperature=0.6 # Balance between creative and accurate
+            temperature=0.6
         )
         ai_reply = response.choices[0].message.content
-    except Exception as e:
-        print(f"Error: {e}")
-        ai_reply = "I'm so sorry, the line is breaking up a bit. Could you say that one more time?"
+    except Exception:
+        ai_reply = "Could you say that again?"
 
-    # Sanitize text for Speech-to-Text engine (Remove asterisks/formatting)
-    clean_reply = ai_reply.replace("*", "").replace("#", "").replace("-", " ")
+    # 3. Log the AI's Reply
+    conversation_logs.append({"role": "ai", "content": ai_reply})
 
-    # Setup the next turn
-    gather = Gather(
-        input='speech',
-        action='/process-speech',
-        speechTimeout='auto',
-        enhanced=True
-    )
-    
+    # 4. Speak
+    clean_reply = ai_reply.replace("*", "").replace("-", " ")
+    gather = Gather(input='speech', action='/process-speech', speechTimeout='auto', enhanced=True)
     gather.say(clean_reply, voice=VOICE_ID)
     resp.append(gather)
-    
-    # Keep line open if they don't hang up
     resp.redirect('/process-speech')
     
     return HTMLResponse(content=str(resp), media_type="application/xml")
