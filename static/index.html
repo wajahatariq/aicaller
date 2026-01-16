@@ -9,42 +9,66 @@
 <body>
     <header>
         <div class="logo">Expert <span>Logo Designer</span> AI</div>
-        <div class="status-badge" id="status">● SYSTEM ACTIVE</div>
+        <button id="toggleBtn" class="btn-stop" onclick="toggleSystem()">SYSTEM OFFLINE</button>
     </header>
 
     <div class="container">
         <div class="chat-window" id="chat-window">
             <div class="message ai">
                 <span class="label">System</span>
-                Waiting for incoming calls...
+                Dashboard initialized. Click the button above to go LIVE.
             </div>
         </div>
     </div>
 
     <script>
         const chatWindow = document.getElementById('chat-window');
+        const toggleBtn = document.getElementById('toggleBtn');
         let lastLogCount = 0;
 
-        async function fetchLogs() {
+        // 1. Handle Button Click
+        async function toggleSystem() {
             try {
-                const response = await fetch('/logs');
+                const response = await fetch('/toggle-system', { method: 'POST' });
+                const data = await response.json();
+                updateButton(data.active);
+            } catch (e) {
+                console.error("Error toggling system:", e);
+            }
+        }
+
+        // 2. Update Button Look
+        function updateButton(isActive) {
+            if (isActive) {
+                toggleBtn.innerText = "● SYSTEM LIVE";
+                toggleBtn.className = "btn-live";
+            } else {
+                toggleBtn.innerText = "■ SYSTEM OFFLINE";
+                toggleBtn.className = "btn-stop";
+            }
+        }
+
+        // 3. Poll for Logs & Status
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/status');
                 const data = await response.json();
                 
-                // If we have new messages, render them
+                // Keep button synced (in case another tab changed it)
+                updateButton(data.active);
+
+                // Update Logs
                 if (data.logs.length > lastLogCount) {
-                    chatWindow.innerHTML = ''; // Clear current
-                    
+                    chatWindow.innerHTML = ''; 
                     data.logs.forEach(msg => {
                         const div = document.createElement('div');
                         div.className = `message ${msg.role}`;
                         div.innerHTML = `
-                            <span class="label">${msg.role === 'ai' ? 'Sarah (AI Agent)' : 'Client (Caller)'}</span>
+                            <span class="label">${msg.role === 'ai' ? 'Sarah (AI)' : (msg.role === 'system' ? 'System Log' : 'Client')}</span>
                             ${msg.content}
                         `;
                         chatWindow.appendChild(div);
                     });
-
-                    // Scroll to bottom
                     chatWindow.scrollTop = chatWindow.scrollHeight;
                     lastLogCount = data.logs.length;
                 }
@@ -53,8 +77,8 @@
             }
         }
 
-        // Poll every 2 seconds for new captions
-        setInterval(fetchLogs, 2000);
+        // Poll every 1 second
+        setInterval(fetchStatus, 1000);
     </script>
 </body>
 </html>
