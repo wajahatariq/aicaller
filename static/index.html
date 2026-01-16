@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Command Center | Expert Logo Designer</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div class="logo">Expert <span>Logo Designer</span> AI</div>
+        <div class="status-badge" id="status">● SYSTEM ACTIVE</div>
+    </header>
+
+    <div class="container">
+        <div class="chat-window" id="chat-window">
+            <div class="message ai">
+                <span class="label">System</span>
+                Waiting for incoming calls...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatWindow = document.getElementById('chat-window');
+        let lastLogCount = 0;
+
+        async function fetchLogs() {
+            try {
+                const response = await fetch('/logs');
+                const data = await response.json();
+                
+                // If we have new messages, render them
+                if (data.logs.length > lastLogCount) {
+                    chatWindow.innerHTML = ''; // Clear current
+                    
+                    data.logs.forEach(msg => {
+                        const div = document.createElement('div');
+                        div.className = `message ${msg.role}`;
+                        div.innerHTML = `
+                            <span class="label">${msg.role === 'ai' ? 'Sarah (AI Agent)' : 'Client (Caller)'}</span>
+                            ${msg.content}
+                        `;
+                        chatWindow.appendChild(div);
+                    });
+
+                    // Scroll to bottom
+                    chatWindow.scrollTop = chatWindow.scrollHeight;
+                    lastLogCount = data.logs.length;
+                }
+            } catch (e) {
+                console.error("Connection lost", e);
+            }
+        }
+
+        // Poll every 2 seconds for new captions
+        setInterval(fetchLogs, 2000);
+    </script>
+</body>
+</html>
