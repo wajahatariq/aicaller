@@ -111,3 +111,41 @@ header {
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--bg-dark); }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+
+/* Add these to your existing CSS */
+
+button {
+    cursor: pointer;
+    font-weight: 700;
+    padding: 0.8rem 1.5rem;
+    border-radius: 30px;
+    border: none;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+    letter-spacing: 1px;
+}
+
+.btn-stop {
+    background: #333;
+    color: #888;
+    border: 1px solid #555;
+}
+
+.btn-stop:hover {
+    background: #444;
+    color: white;
+}
+
+.btn-live {
+    background: #00FF88;
+    color: #004422;
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.4);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(0, 255, 136, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0); }
+}
