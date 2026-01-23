@@ -10,69 +10,54 @@
 <body>
     <header>
         <div class="logo">EXPERT <span>DIALER</span></div>
-        <div class="status-badge">● SYSTEM READY</div>
+        <button id="autoBtn" class="btn-gold" onclick="startCampaign()">🚀 AUTO-DIAL SHEET</button>
     </header>
 
     <div class="container">
         <div class="dialer-panel">
             <div class="input-group">
-                <label>PHONE NUMBER</label>
+                <label>MANUAL DIAL</label>
                 <input type="text" id="phoneInput" placeholder="+1234567890" />
             </div>
-            <div class="input-group">
-                <label>CLIENT NAME</label>
-                <input type="text" id="nameInput" placeholder="John Doe" class="secondary-input"/>
-            </div>
-            <button id="callBtn" onclick="makeCall()">INITIATE COLD CALL</button>
+            <button id="callBtn" onclick="makeCall()">CALL SINGLE NUMBER</button>
         </div>
 
         <div class="chat-window" id="chat-window">
             <div class="message system">
                 <span class="label">SYSTEM</span>
-                Waiting for outbound command...
+                Ready. Click "Auto-Dial Sheet" to call everyone in 'AI Caller Agent'.
             </div>
         </div>
     </div>
 
     <script>
         const chatWindow = document.getElementById('chat-window');
-        const callBtn = document.getElementById('callBtn');
+        const autoBtn = document.getElementById('autoBtn');
         let lastLogCount = 0;
 
-        async function makeCall() {
-            const phone = document.getElementById('phoneInput').value;
-            const name = document.getElementById('nameInput').value || "Friend";
-
-            if (!phone) { alert("Enter a phone number!"); return; }
-
-            callBtn.innerText = "DIALING...";
-            callBtn.classList.add('dialing');
-            callBtn.disabled = true;
+        async function startCampaign() {
+            if(!confirm("Are you sure you want to call EVERYONE on the sheet?")) return;
+            
+            autoBtn.innerText = "⏳ PROCESSING SHEET...";
+            autoBtn.disabled = true;
 
             try {
-                const res = await fetch('/make-call', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ phone: phone, name: name })
-                });
+                const res = await fetch('/start-campaign', { method: 'POST' });
                 const data = await res.json();
                 
-                if(data.status === "error") {
+                if(data.status === "success") {
+                    alert(`Success! System is dialing ${data.count} leads now.`);
+                } else {
                     alert("Error: " + data.message);
-                    resetBtn();
                 }
             } catch (e) {
                 alert("Network Error");
-                resetBtn();
             }
+            autoBtn.innerText = "🚀 AUTO-DIAL SHEET";
+            autoBtn.disabled = false;
         }
 
-        function resetBtn() {
-            callBtn.innerText = "INITIATE COLD CALL";
-            callBtn.classList.remove('dialing');
-            callBtn.disabled = false;
-        }
-
+        // ... (Include your makeCall, resetBtn, fetchStatus functions from previous code here) ...
         async function fetchStatus() {
             try {
                 const response = await fetch('/status');
@@ -91,12 +76,9 @@
                     });
                     chatWindow.scrollTop = chatWindow.scrollHeight;
                     lastLogCount = data.logs.length;
-                    
-                    if(data.call_active === false && lastLogCount > 1) resetBtn();
                 }
             } catch (e) { console.error(e); }
         }
-
         setInterval(fetchStatus, 1000);
     </script>
 </body>
